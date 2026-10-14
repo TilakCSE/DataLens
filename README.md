@@ -10,35 +10,35 @@ Python 3.11 or newer is required. From the repository root:
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```
 
-On macOS or Linux, activate the environment with `source .venv/bin/activate`.
+On macOS or Linux, use `.venv/bin/python -m pip install -e ".[dev]"`.
 
 ## Repeat the core demo
 
 The clean sample shows ordinary profiling and chart suggestions:
 
 ```powershell
-datalens analyse examples/sales_clean.csv
+.\.venv\Scripts\datalens.exe analyse examples/sales_clean.csv
 ```
 
 The messy sample contains missing values and a duplicated row, which should
 appear in the quality findings:
 
 ```powershell
-datalens analyse examples/sales_messy.csv
+.\.venv\Scripts\datalens.exe analyse examples/sales_messy.csv
 ```
 
 The same report is available as machine-readable JSON:
 
 ```powershell
-datalens analyse examples/sales_messy.csv --format json
+.\.venv\Scripts\datalens.exe analyse examples/sales_messy.csv --format json
 ```
 
 You can also run the CLI as `python -m datalens.cli analyse ...` from the
-installed environment. To verify the core, run `python -m pytest`.
+installed environment. To verify the core on Windows, run
+`.\.venv\Scripts\python.exe -m pytest`.
 
 ## Python interface
 
