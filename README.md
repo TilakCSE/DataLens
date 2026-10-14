@@ -19,4 +19,4 @@ The CLI will use the same engine:
 datalens analyse sales.csv
 ```
 
-Implementation is in progress. See [the core contract](Docs/core-contract.md) for the agreed interface and acceptance criteria. The [project brief](Docs/DataLens%20-%20Major%20Project%20Brief.docx) describes the larger product vision.
+Implementation is in progress. See [the core contract](Docs/core-contract.md) for the agreed interface and acceptance criteria, and [the agent workflow](Docs/agent-workflow.md) for the worktree setup. The [project brief](Docs/DataLens%20-%20Major%20Project%20Brief.docx) describes the larger product vision.

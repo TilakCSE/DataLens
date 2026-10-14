@@ -24,8 +24,8 @@ Column kinds are `numeric`, `categorical`, `datetime`, `boolean`, or `unknown`. 
 
 ## Component boundaries
 
-- `datalens.io`: CSV/Excel loading with clear errors for unsupported or unreadable files; column kind inference helpers.
-- `datalens.analysis`: deterministic profile, quality checks, and `analyse` composition.
+- `datalens.io`: CSV/Excel loading with clear errors for unsupported or unreadable files.
+- `datalens.analysis`: column kind inference, deterministic profile, and quality checks.
 - `datalens.recommend`: deterministic chart recommendations from the profile.
 - `datalens.cli`: text and JSON output over the same report, plus a repeatable demo command or documented sample invocations.
 - `datalens.models`: shared report classes, owned by the integration coordinator.
