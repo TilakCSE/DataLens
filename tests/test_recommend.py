@@ -36,3 +36,30 @@ def test_does_not_mutate_profiles():
     profiles = (column("value", "numeric"),)
     assert len(recommend_charts(profiles)) == 1
     assert len(profiles) == 1
+
+
+def test_titanic_like_profiles_avoid_identifier_and_high_cardinality_charts():
+    def profile(name: str, kind: str, observed: int, unique: int) -> ColumnProfile:
+        return ColumnProfile(name, kind, "object", observed, 0, unique)
+
+    profiles = (
+        profile("PassengerId", "numeric", 891, 891),
+        profile("Survived", "numeric", 891, 2),
+        profile("Pclass", "numeric", 891, 3),
+        profile("Name", "categorical", 891, 891),
+        profile("Ticket", "categorical", 891, 681),
+        profile("Sex", "categorical", 891, 2),
+        profile("Age", "numeric", 714, 88),
+        profile("Fare", "numeric", 891, 248),
+    )
+
+    recommendations = recommend_charts(profiles)
+
+    assert not any(
+        name in item.columns
+        for item in recommendations
+        for name in ("PassengerId", "Name", "Ticket")
+    )
+    assert any(item.chart_type == "bar" and item.columns == ("Survived",) for item in recommendations)
+    assert any(item.chart_type == "bar" and item.columns == ("Pclass",) for item in recommendations)
+    assert any(item.chart_type == "scatter" and item.columns == ("Age", "Fare") for item in recommendations)

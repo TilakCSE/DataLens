@@ -36,6 +36,22 @@ The same report is available as machine-readable JSON:
 .\.venv\Scripts\datalens.exe analyse examples/sales_messy.csv --format json
 ```
 
+## Larger public dataset demo
+
+The repository also includes a local Titanic training CSV used for the project
+presentation. It has 891 rows and 12 columns. The CLI reports 177 missing Age
+values, 687 missing Cabin values, 2 missing Embarked values, and no exact
+duplicate rows:
+
+```powershell
+.\.venv\Scripts\datalens.exe analyse examples/titanic_train_demo.csv
+```
+
+See [the dataset source note](examples/TITANIC_DEMO_SOURCE.md) for its public
+mirror, Kaggle competition reference, and checksum. These are type-based chart
+suggestions; numeric-coded categories such as `Survived` and `Pclass` currently
+receive generic numeric suggestions.
+
 You can also run the CLI as `python -m datalens.cli analyse ...` from the
 installed environment. To verify the core on Windows, run
 `.\.venv\Scripts\python.exe -m pytest`.
