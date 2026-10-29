@@ -32,6 +32,12 @@ from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardSc
 _ID_NAME = re.compile(r"(^id$|[_\s-]id$|^id[_\s-]|identifier$|^index$)", re.I)
 
 
+def _looks_like_identifier(name: object) -> bool:
+    """Recognize common ID names, including camel-case names like PassengerId."""
+    text = str(name).strip()
+    return bool(_ID_NAME.search(text) or re.search(r"[a-z0-9](?:Id|ID)$", text))
+
+
 def _as_text_with_missing(values: Any) -> Any:
     """Normalize mixed categorical values before sklearn imputes and encodes."""
     frame = pd.DataFrame(values).astype("object")
@@ -115,7 +121,7 @@ def _feature_groups(frame: pd.DataFrame) -> tuple[list[str], list[str], list[str
         if non_null.empty:
             excluded.append(name)
             warnings.append(f"Excluded {name}: every value is missing.")
-        elif _ID_NAME.search(str(name)):
+        elif _looks_like_identifier(name):
             excluded.append(name)
             warnings.append(f"Excluded {name}: its name suggests an identifier.")
         elif pd.api.types.is_datetime64_any_dtype(series):

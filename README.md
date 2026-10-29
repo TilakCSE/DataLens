@@ -1,8 +1,9 @@
 # DataLens
 
-DataLens is a local Python data understanding engine. The core profiles a pandas
-DataFrame, reports quality findings, and recommends charts using explicit rules.
-It does not require an AI provider, database, or web service.
+DataLens is a local Python data understanding and training tool. It profiles a
+pandas DataFrame, reports quality findings, recommends charts using explicit
+rules, and can train a tabular classification pipeline. It does not require an
+AI provider, database, or web service.
 
 ## Install
 
@@ -48,9 +49,49 @@ duplicate rows:
 ```
 
 See [the dataset source note](examples/TITANIC_DEMO_SOURCE.md) for its public
-mirror, Kaggle competition reference, and checksum. These are type-based chart
-suggestions; numeric-coded categories such as `Survived` and `Pclass` currently
-receive generic numeric suggestions.
+mirror, Kaggle competition reference, and checksum. Chart suggestions are
+type-based; low-cardinality numeric columns such as `Survived` and `Pclass`
+can receive count charts. Use `--verbose` for every column statistic and chart
+idea, or `--format json` for the full structured report.
+
+## Train a first classification model
+
+The first training workflow accepts a labelled CSV or Excel file and an explicit
+target column. It compares a dummy baseline, logistic regression, and random
+forest using training-only cross-validation. Numeric imputation and scaling,
+categorical imputation and encoding, and the chosen estimator are saved together
+in a scikit-learn pipeline. The selected model is evaluated once on a separate
+holdout set.
+
+```powershell
+.\.venv\Scripts\datalens.exe train examples/titanic_train_demo.csv --target Survived --output titanic-model.joblib
+```
+
+This creates `titanic-model.joblib` and a neighbouring `titanic-model.json`
+manifest. The CLI prints the model choice, candidate cross-validation scores,
+held-out accuracy, balanced accuracy, and macro F1. Use `--format json` for the
+full training report. Choose a new output path for each run; the CLI will not
+overwrite an existing artifact.
+
+From Python, the same training engine is available through the public API:
+
+```python
+import pandas as pd
+import datalens as dl
+
+df = pd.read_csv("examples/titanic_train_demo.csv")
+result = dl.train(df, target="Survived")
+print(result.to_dict())
+result.save("titanic-model.joblib")
+predictions = result.pipeline.predict(df.drop(columns="Survived").head())
+```
+
+This version handles local tabular classification with random stratified splits.
+It automatically chooses among two trained candidates; interactive model and
+preprocessing choices, regression, grouped or time-aware splitting, and deep
+learning are future work. Review excluded features and any possible target
+leakage before using the saved model. Model artifacts are Python pickle-based:
+load only artifacts you trust, using compatible package versions.
 
 You can also run the CLI as `python -m datalens.cli analyse ...` from the
 installed environment. To verify the core on Windows, run
@@ -72,6 +113,7 @@ The CLI calls the same `analyse` function and displays the same report. Chart
 recommendations are type-based suggestions with stated reasons. They are not
 claims that a chart reveals a causal relationship.
 
-See the [core contract](Docs/core-contract.md) for the deliverable,
+See the [core contract](Docs/core-contract.md) and
+[training phase contract](Docs/automl-phase-contract.md) for the deliverables,
 the [agent workflow](Docs/agent-workflow.md) for the worktree setup, and the
 [project brief](Docs/DataLens%20-%20Major%20Project%20Brief.docx) for the wider vision.

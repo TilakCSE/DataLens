@@ -10,6 +10,7 @@ from datalens.recommend import recommend_charts
 
 if TYPE_CHECKING:
     import pandas as pd
+    from datalens.training import TrainingResult
 
 
 def analyse(dataframe: pd.DataFrame) -> AnalysisReport:
@@ -22,4 +23,19 @@ def analyse(dataframe: pd.DataFrame) -> AnalysisReport:
         columns=columns,
         quality_issues=issues,
         recommendations=recommend_charts(columns),
+    )
+
+
+def train(
+    dataframe: pd.DataFrame,
+    *,
+    target: str,
+    test_size: float = 0.2,
+    random_state: int = 42,
+) -> TrainingResult:
+    """Train and evaluate a local tabular classifier on labelled data."""
+    from datalens.training import train_classifier
+
+    return train_classifier(
+        dataframe, target, test_size=test_size, random_state=random_state
     )

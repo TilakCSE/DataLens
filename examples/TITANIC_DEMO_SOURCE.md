@@ -18,4 +18,12 @@ Run from the repository root:
 .\.venv\Scripts\datalens.exe analyse examples\titanic_train_demo.csv
 ```
 
-The dataset is a demo input for DataLens profiling, not a model trained by this project. The current core does not predict survival.
+The dataset is a demo input for profiling and for the first local classification
+workflow. To train a saved survival classifier, run:
+
+```powershell
+.\.venv\Scripts\datalens.exe train examples\titanic_train_demo.csv --target Survived --output titanic-model.joblib
+```
+
+The holdout metrics from this example demonstrate the workflow on this dataset;
+they do not establish that the model is suitable for real-world decisions.

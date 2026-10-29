@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 from sklearn.model_selection import train_test_split
 
+import datalens as dl
 from datalens.training import train_classifier
 
 
@@ -37,6 +38,16 @@ def test_mixed_values_and_high_cardinality_are_handled_without_mutating_input():
     }
     assert len(result.pipeline.predict(frame[result.feature_columns])) == len(frame)
     json.dumps(result.to_dict())
+
+
+def test_public_train_entry_point_and_camel_case_identifier():
+    frame = _mixed_frame().rename(columns={"record_id": "PassengerId"})
+
+    result = dl.train(frame, target="outcome")
+
+    assert "PassengerId" in result.excluded_columns
+    assert "PassengerId" not in result.feature_columns
+    assert result.to_dict()["target"] == "outcome"
 
 
 def test_train_only_imputation_statistics_and_saved_pipeline(tmp_path):
