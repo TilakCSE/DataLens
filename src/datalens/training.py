@@ -10,8 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import platform
-import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -27,16 +26,10 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score
 from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_val_score, train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler
+from sklearn.preprocessing import FunctionTransformer, MinMaxScaler, OneHotEncoder, RobustScaler, StandardScaler
 
+from datalens.cleaning import looks_like_identifier
 
-_ID_NAME = re.compile(r"(^id$|[_\s-]id$|^id[_\s-]|identifier$|^index$)", re.I)
-
-
-def _looks_like_identifier(name: object) -> bool:
-    """Recognize common ID names, including camel-case names like PassengerId."""
-    text = str(name).strip()
-    return bool(_ID_NAME.search(text) or re.search(r"[a-z0-9](?:Id|ID)$", text))
 
 
 def _as_text_with_missing(values: Any) -> Any:
@@ -66,6 +59,9 @@ class TrainingResult:
     test_size: float
     dropped_target_rows: int
     dataset_fingerprint: str
+    preprocessing: dict[str, Any] = field(default_factory=dict)
+    selection_method: str = "cross_validation"
+    dropped_duplicate_rows: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         """Return JSON-compatible facts about this run, excluding model bytes."""
@@ -86,6 +82,9 @@ class TrainingResult:
             "test_size": self.test_size,
             "dropped_target_rows": self.dropped_target_rows,
             "dataset_fingerprint": self.dataset_fingerprint,
+            "preprocessing": dict(self.preprocessing),
+            "selection_method": self.selection_method,
+            "dropped_duplicate_rows": self.dropped_duplicate_rows,
         }
 
     def save(self, path: str | Path) -> Path:
@@ -124,7 +123,7 @@ def _feature_groups(frame: pd.DataFrame) -> tuple[list[str], list[str], list[str
         if non_null.empty:
             excluded.append(name)
             warnings.append(f"Excluded {name}: every value is missing.")
-        elif _looks_like_identifier(name):
+        elif looks_like_identifier(name):
             excluded.append(name)
             warnings.append(f"Excluded {name}: its name suggests an identifier.")
         elif pd.api.types.is_datetime64_any_dtype(series):
@@ -142,41 +141,66 @@ def _feature_groups(frame: pd.DataFrame) -> tuple[list[str], list[str], list[str
     return numeric, categorical, excluded, warnings
 
 
-def _preprocessor(numeric: list[str], categorical: list[str], *, scale: bool) -> ColumnTransformer:
+def _preprocessor(
+    numeric: list[str], categorical: list[str], *, scale: bool,
+    numeric_imputers: dict[str, str], categorical_imputers: dict[str, str],
+    scaler: str,
+) -> ColumnTransformer:
     transforms: list[tuple[str, Any, list[str]]] = []
-    if numeric:
+    numeric_groups: dict[str, list[str]] = {}
+    for name in numeric:
+        numeric_groups.setdefault(numeric_imputers.get(name, "median"), []).append(name)
+    for strategy, names in numeric_groups.items():
         numeric_steps: list[tuple[str, Any]] = [
-            ("impute", SimpleImputer(strategy="median", keep_empty_features=True))
+            ("impute", SimpleImputer(strategy=strategy, keep_empty_features=True))
         ]
-        if scale:
-            numeric_steps.append(("scale", StandardScaler()))
-        transforms.append(("numeric", Pipeline(numeric_steps), numeric))
-    if categorical:
+        if scale and scaler != "none":
+            scaler_type = {
+                "standard": StandardScaler,
+                "minmax": MinMaxScaler,
+                "robust": RobustScaler,
+            }[scaler]
+            numeric_steps.append(("scale", scaler_type()))
+        group_name = "numeric" if len(numeric_groups) == 1 else f"numeric_{strategy}"
+        transforms.append((group_name, Pipeline(numeric_steps), names))
+    categorical_groups: dict[str, list[str]] = {}
+    for name in categorical:
+        categorical_groups.setdefault(categorical_imputers.get(name, "constant"), []).append(name)
+    for strategy, names in categorical_groups.items():
         transforms.append(
             (
-                "categorical",
+                "categorical" if len(categorical_groups) == 1 else f"categorical_{strategy}",
                 Pipeline(
                     [
                         ("text", FunctionTransformer(_as_text_with_missing, validate=False)),
                         (
                             "impute",
                             SimpleImputer(
-                                strategy="constant",
-                                fill_value="__missing__",
+                                strategy=strategy,
+                                fill_value="__missing__" if strategy == "constant" else None,
                                 keep_empty_features=True,
                             ),
                         ),
                         ("encode", OneHotEncoder(handle_unknown="ignore")),
                     ]
                 ),
-                categorical,
+                names,
             )
         )
     return ColumnTransformer(transforms, remainder="drop")
 
 
-def _pipeline(estimator: Any, numeric: list[str], categorical: list[str], *, scale: bool) -> Pipeline:
-    return Pipeline([("preprocess", _preprocessor(numeric, categorical, scale=scale)), ("model", estimator)])
+def _pipeline(
+    estimator: Any, numeric: list[str], categorical: list[str], *, scale: bool,
+    numeric_imputers: dict[str, str], categorical_imputers: dict[str, str], scaler: str,
+) -> Pipeline:
+    return Pipeline([
+        ("preprocess", _preprocessor(
+            numeric, categorical, scale=scale, numeric_imputers=numeric_imputers,
+            categorical_imputers=categorical_imputers, scaler=scaler,
+        )),
+        ("model", estimator),
+    ])
 
 
 def _fingerprint(frame: pd.DataFrame) -> str:
@@ -193,6 +217,12 @@ def train_classifier(
     *,
     test_size: float = 0.2,
     random_state: int = 42,
+    numeric_imputers: dict[str, str] | None = None,
+    categorical_imputers: dict[str, str] | None = None,
+    exclude_columns: list[str] | None = None,
+    scaler: str = "standard",
+    model: str = "auto",
+    drop_duplicates: bool = False,
 ) -> TrainingResult:
     """Compare bounded local classifiers and evaluate once on a holdout set.
 
@@ -209,9 +239,27 @@ def train_classifier(
         raise ValueError(f"Target column {target!r} was not found")
     if not 0 < test_size < 0.5:
         raise ValueError("test_size must be greater than 0 and less than 0.5")
+    if scaler not in {"standard", "minmax", "robust", "none"}:
+        raise ValueError("scaler must be standard, minmax, robust, or none")
+    if model not in {"auto", "logistic_regression", "random_forest"}:
+        raise ValueError("model must be auto, logistic_regression, or random_forest")
+    numeric_imputers = dict(numeric_imputers or {})
+    categorical_imputers = dict(categorical_imputers or {})
+    if any(value not in {"median", "mean"} for value in numeric_imputers.values()):
+        raise ValueError("numeric imputers must be median or mean")
+    if any(value not in {"constant", "most_frequent"} for value in categorical_imputers.values()):
+        raise ValueError("categorical imputers must be constant or most_frequent")
+    excluded_by_user = list(exclude_columns or [])
+    if target in excluded_by_user:
+        raise ValueError("The target cannot be excluded as a feature")
+    unknown = set(excluded_by_user + list(numeric_imputers) + list(categorical_imputers)) - set(df.columns)
+    if unknown:
+        raise ValueError(f"Unknown feature column(s): {', '.join(sorted(unknown))}")
 
-    labelled = df.loc[df[target].notna()].copy()
-    dropped_target_rows = len(df) - len(labelled)
+    working = df.drop_duplicates().copy() if drop_duplicates else df.copy()
+    dropped_duplicate_rows = len(df) - len(working)
+    labelled = working.loc[working[target].notna()].copy()
+    dropped_target_rows = len(working) - len(labelled)
     if len(labelled) < 8:
         raise ValueError("At least 8 labelled rows are required for classification")
     y = labelled[target]
@@ -222,7 +270,7 @@ def train_classifier(
     if y.value_counts(dropna=False).min() < 3:
         raise ValueError("Each target class needs at least 3 rows for a stratified split")
 
-    features = labelled.drop(columns=[target])
+    features = labelled.drop(columns=[target, *excluded_by_user])
     try:
         X_train, X_test, y_train, y_test = train_test_split(
             features, y, test_size=test_size, random_state=random_state, stratify=y
@@ -231,6 +279,9 @@ def train_classifier(
         raise ValueError(f"Unable to make a stratified train/test split: {error}") from error
     # All data-dependent feature decisions use training rows only.
     numeric, categorical, excluded, warnings = _feature_groups(X_train)
+    excluded = excluded_by_user + excluded
+    if dropped_duplicate_rows:
+        warnings.append(f"Removed {dropped_duplicate_rows} exact duplicate row(s) before splitting.")
     feature_columns = numeric + categorical
     if not feature_columns:
         raise ValueError("No supported feature columns remain after validation")
@@ -261,10 +312,16 @@ def train_classifier(
             {"model__max_depth": [5, 10, None]},
         ),
     ]
+    if model != "auto":
+        candidates = [item for item in candidates if item[0] in {"dummy", model}]
     scores: list[dict[str, Any]] = []
     fitted_candidates: dict[str, Pipeline] = {}
     for name, estimator, scale, grid in candidates:
-        pipe = _pipeline(estimator, numeric, categorical, scale=scale)
+        pipe = _pipeline(
+            estimator, numeric, categorical, scale=scale,
+            numeric_imputers=numeric_imputers,
+            categorical_imputers=categorical_imputers, scaler=scaler,
+        )
         if grid:
             search = GridSearchCV(
                 pipe, grid, cv=cv, scoring="f1_macro", n_jobs=1, refit=True, error_score="raise"
@@ -307,4 +364,11 @@ def train_classifier(
         test_size=test_size,
         dropped_target_rows=dropped_target_rows,
         dataset_fingerprint=_fingerprint(labelled),
+        preprocessing={
+            "numeric_imputers": {name: numeric_imputers.get(name, "median") for name in numeric},
+            "categorical_imputers": {name: categorical_imputers.get(name, "constant") for name in categorical},
+            "scaler_for_logistic_regression": scaler,
+        },
+        selection_method="cross_validation" if model == "auto" else "user_override",
+        dropped_duplicate_rows=dropped_duplicate_rows,
     )

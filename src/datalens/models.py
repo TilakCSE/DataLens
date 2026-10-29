@@ -34,6 +34,15 @@ class ChartRecommendation:
 
 
 @dataclass(frozen=True)
+class CleaningSuggestion:
+    column: str | None
+    issue: str
+    recommended_action: str
+    alternatives: tuple[str, ...]
+    reason: str
+
+
+@dataclass(frozen=True)
 class AnalysisReport:
     row_count: int
     column_count: int
@@ -41,6 +50,7 @@ class AnalysisReport:
     columns: tuple[ColumnProfile, ...]
     quality_issues: tuple[QualityIssue, ...] = ()
     recommendations: tuple[ChartRecommendation, ...] = ()
+    cleaning_suggestions: tuple[CleaningSuggestion, ...] = ()
 
     @property
     def summary(self) -> dict[str, int]:
@@ -50,6 +60,7 @@ class AnalysisReport:
             "duplicate_rows": self.duplicate_row_count,
             "quality_issues": len(self.quality_issues),
             "recommendations": len(self.recommendations),
+            "cleaning_suggestions": len(self.cleaning_suggestions),
         }
 
     def to_dict(self) -> dict[str, Any]:

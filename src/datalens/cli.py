@@ -68,8 +68,17 @@ def format_report(report: AnalysisReport, *, verbose: bool = False) -> str:
             )
             for key, value in column.statistics.items():
                 lines.append(f"    {key}: {_format_value(value)}")
-    else:
-        lines.extend(("", "Use --verbose for all column details, or --format json for the full report."))
+    suggestions = report.cleaning_suggestions
+    if suggestions:
+        visible = suggestions if verbose else suggestions[:3]
+        lines.extend(("", f"Cleaning suggestions ({len(suggestions)}):"))
+        for suggestion in visible:
+            label = suggestion.column or "dataset"
+            lines.append(f"  {label}: {suggestion.recommended_action} - {suggestion.reason}")
+        if len(visible) < len(suggestions):
+            lines.append(f"  ... {len(suggestions) - len(visible)} more")
+    if not verbose:
+        lines.extend(("", "Use --verbose for all details, --format json for the full report, or guide for choices."))
 
     return "\n".join(lines)
 
@@ -92,8 +101,13 @@ def format_training_result(result: object, *, saved_path: Path | None = None) ->
         f"Data: {data['train_rows']} train / {data['test_rows']} test rows  "
         f"Features: {len(data['feature_columns'])} used, {len(data['excluded_columns'])} excluded",
         f"Selected model: {data['model']}",
-        f"  Why: highest training cross-validation {data['selection_metric']} "
-        f"({data['cv_score']:.3f}) among the tested candidates",
+        (
+            f"  Why: user selected; training cross-validation {data['selection_metric']} "
+            f"was {data['cv_score']:.3f}"
+            if data.get("selection_method") == "user_override"
+            else f"  Why: highest training cross-validation {data['selection_metric']} "
+                 f"({data['cv_score']:.3f}) among the tested candidates"
+        ),
         "Held-out test: " + ", ".join(f"{name} {score:.3f}" for name, score in metrics.items()),
         "",
         "Candidates (training cross-validation):",
@@ -102,8 +116,21 @@ def format_training_result(result: object, *, saved_path: Path | None = None) ->
         lines.append(
             f"  {candidate['model']}: {data['selection_metric']} {candidate['cv_score']:.3f}"
         )
+    preprocessing = data.get("preprocessing")
+    if preprocessing:
+        numeric_methods = ", ".join(sorted(set(preprocessing["numeric_imputers"].values()))) or "none"
+        categorical_methods = ", ".join(sorted(set(preprocessing["categorical_imputers"].values()))) or "none"
+        scaling = (
+            preprocessing["scaler_for_logistic_regression"]
+            if data["model"] == "logistic_regression" else "not used by selected model"
+        )
+        lines.append(
+            f"Preprocessing: numeric {numeric_methods}; categorical {categorical_methods}; scaling {scaling}"
+        )
     if data["dropped_target_rows"]:
         lines.append(f"Rows without a target excluded: {data['dropped_target_rows']}")
+    if data.get("dropped_duplicate_rows"):
+        lines.append(f"Exact duplicate rows removed: {data['dropped_duplicate_rows']}")
     if data["excluded_columns"]:
         lines.append("Excluded features: " + ", ".join(data["excluded_columns"]))
     if data["warnings"]:
@@ -134,6 +161,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     train_parser.add_argument("--target", required=True, help="Column to predict")
     train_parser.add_argument("--output", help="Model artifact path (.joblib)")
     train_parser.add_argument("--format", choices=("text", "json"), default="text")
+    guide_parser = commands.add_parser("guide", help="Walk through analysis, cleaning choices, and optional training")
+    guide_parser.add_argument("path", help="Path to a CSV or Excel file")
+    guide_parser.add_argument("--target", help="Proposed target column; you will confirm it")
+    guide_parser.add_argument("--output", help="Suggested model artifact path (.joblib)")
     args = parser.parse_args(argv)
 
     # Lazy imports keep report formatting usable without loading data or ML libraries.
@@ -141,6 +172,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         dataset = load_dataset(args.path)
+        if args.command == "guide":
+            from datalens.guided import guide_dataframe
+
+            guide_dataframe(
+                dataset, target=args.target, output=args.output, source_name=args.path
+            )
+            return 0
         if args.command == "analyse":
             from datalens.api import analyse
 

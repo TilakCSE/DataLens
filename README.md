@@ -37,6 +37,21 @@ The same report is available as machine-readable JSON:
 .\.venv\Scripts\datalens.exe analyse examples/sales_messy.csv --format json
 ```
 
+`analyse` reports the data as it is. Its result includes column profiles,
+calculated quality issues, cleaning suggestions, and chart ideas; it does not
+change the DataFrame or ask questions. For an interactive walkthrough, run:
+
+```powershell
+.\.venv\Scripts\datalens.exe guide examples/titanic_train_demo.csv --target Survived --output runs/titanic-guided.joblib
+```
+
+The guide shows chart ideas and then asks whether to continue to training. It
+offers per-column missing-value choices (recommended imputer, alternative, or
+skip the column), duplicate handling when needed, scaler and model choices,
+and a final save/skip choice. Enter `x` at any prompt to exit. Fitted imputers,
+encoders, and scalers remain inside the training pipeline; reviewing a cleaning
+suggestion does not edit the source file.
+
 ## Larger public dataset demo
 
 The repository also includes a local Titanic training CSV used for the project
@@ -87,8 +102,9 @@ predictions = result.pipeline.predict(df.drop(columns="Survived").head())
 ```
 
 This version handles local tabular classification with random stratified splits.
-It automatically chooses among two trained candidates; interactive model and
-preprocessing choices, regression, grouped or time-aware splitting, and deep
+It automatically chooses among two trained candidates when using `dl.train` or
+the non-interactive `train` CLI command. The guided path offers model and
+preprocessing choices. Regression, grouped or time-aware splitting, and deep
 learning are future work. Review excluded features and any possible target
 leakage before using the saved model. Model artifacts are Python pickle-based:
 load only artifacts you trust, using compatible package versions.
@@ -107,11 +123,25 @@ df = pd.read_csv("examples/sales_messy.csv")
 report = dl.analyse(df)
 print(report.summary)
 print(report.to_dict())
+for suggestion in report.cleaning_suggestions:
+    print(suggestion.column, suggestion.recommended_action, suggestion.reason)
 ```
 
 The CLI calls the same `analyse` function and displays the same report. Chart
 recommendations are type-based suggestions with stated reasons. They are not
 claims that a chart reveals a causal relationship.
+
+`dl.analyse(df)` is the original non-interactive analysis API. Use
+`dl.train(df, target="...")` for reproducible automatic classification, or
+`dl.guide(df, target="...")` for the optional question-by-question terminal
+workflow. These are separate functions so analysis never unexpectedly starts
+model training.
+
+The original DataLens vision extends beyond the current core: rendered and
+interactive charts, relationship and anomaly analysis, natural-language
+questions, dashboards, and more data sources are still planned. The current
+analysis API provides measured profiles, quality findings, and chart
+recommendations; it does not claim to deliver those later features yet.
 
 See the [core contract](Docs/core-contract.md) and
 [training phase contract](Docs/automl-phase-contract.md) for the deliverables,

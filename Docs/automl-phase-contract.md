@@ -6,11 +6,12 @@ The first local classification slice now runs through `dl.train(df, target=...)`
 and `datalens train <path> --target <column>`. It compares a dummy baseline,
 logistic regression, and random forest; keeps fitted preprocessing inside each
 pipeline; selects by training cross-validation macro F1; evaluates on an
-untouched holdout; and saves the fitted pipeline with a JSON manifest. The CLI
-uses a fixed, reproducible default rather than interactive choices. The
-remaining criteria below guide subsequent work, especially class balance and
-configuration reporting, user overrides, grouped or time-aware splits, and a
-second independent dataset.
+untouched holdout; and saves the fitted pipeline with a JSON manifest. The
+separate `dl.guide(df)` and `datalens guide <path>` walkthrough now connects
+the analysis report to chart ideas, cleaning choices, model choice, and saving.
+The non-interactive `train` command retains reproducible defaults. Remaining
+work includes class balance and configuration reporting, grouped or time-aware
+splits, and a second independent dataset.
 
 ## Purpose
 

@@ -20,6 +20,11 @@ print(report.to_dict())
 
 `AnalysisReport` contains row and column counts, duplicate row count, one `ColumnProfile` per column, quality issues, and chart recommendations. `to_dict()` returns JSON-serializable values. Each recommendation names its columns and gives a concrete reason; a rule-based score must not be presented as a probability.
 
+The later guided phase adds `cleaning_suggestions` to this report. Suggestions
+describe calculated issues and reviewable actions; `analyse` remains read-only
+and non-interactive. Interactive training lives in the separate `dl.guide(df)`
+entry point, while `dl.train(df, target=...)` is programmatic.
+
 Column kinds are `numeric`, `categorical`, `datetime`, `boolean`, or `unknown`. The source pandas dtype is reported separately. Missing values and unique counts must be calculated consistently, including empty DataFrames.
 
 ## Component boundaries
