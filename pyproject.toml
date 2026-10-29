@@ -9,6 +9,7 @@ description = "Deterministic data profiling and visualization recommendations"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "numpy",
     "pandas",
     "openpyxl",
     "scikit-learn",

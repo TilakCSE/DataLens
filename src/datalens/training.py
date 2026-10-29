@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import joblib
+import numpy as np
 import pandas as pd
 import sklearn
 from sklearn.compose import ColumnTransformer
@@ -41,7 +42,9 @@ def _looks_like_identifier(name: object) -> bool:
 def _as_text_with_missing(values: Any) -> Any:
     """Normalize mixed categorical values before sklearn imputes and encodes."""
     frame = pd.DataFrame(values).astype("object")
-    return frame.map(lambda value: None if pd.isna(value) else str(value)).to_numpy()
+    return frame.map(
+        lambda value: np.nan if pd.isna(value) else str(value)
+    ).to_numpy(dtype=object)
 
 
 @dataclass
@@ -155,7 +158,14 @@ def _preprocessor(numeric: list[str], categorical: list[str], *, scale: bool) ->
                 Pipeline(
                     [
                         ("text", FunctionTransformer(_as_text_with_missing, validate=False)),
-                        ("impute", SimpleImputer(strategy="constant", fill_value="__missing__", missing_values=None, keep_empty_features=True)),
+                        (
+                            "impute",
+                            SimpleImputer(
+                                strategy="constant",
+                                fill_value="__missing__",
+                                keep_empty_features=True,
+                            ),
+                        ),
                         ("encode", OneHotEncoder(handle_unknown="ignore")),
                     ]
                 ),
