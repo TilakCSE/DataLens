@@ -7,12 +7,13 @@ from typing import TYPE_CHECKING, Callable
 
 from datalens.analysis import profile_dataframe
 from datalens.cleaning import suggest_cleaning
-from datalens.models import AnalysisReport
+from datalens.models import AnalysisReport, ChartRecommendation
 from datalens.recommend import recommend_charts
 
 if TYPE_CHECKING:
     import pandas as pd
     from datalens.training import TrainingResult
+    from datalens.rendering import RenderedChart
 
 
 def analyse(dataframe: pd.DataFrame) -> AnalysisReport:
@@ -26,6 +27,36 @@ def analyse(dataframe: pd.DataFrame) -> AnalysisReport:
         quality_issues=issues,
         recommendations=recommend_charts(columns),
         cleaning_suggestions=suggest_cleaning(columns, duplicate_count),
+    )
+
+
+def visualise(
+    dataframe: pd.DataFrame, chart: int | ChartRecommendation = 1, *,
+    aggregation: str = "mean", max_categories: int = 20,
+) -> RenderedChart:
+    """Render one numbered chart idea from this DataFrame's analysis report.
+
+    Chart numbers start at 1, matching the CLI. The returned chart can be
+    inspected in Python or saved as a self-contained interactive HTML file.
+    """
+    from datalens.rendering import render_recommendation
+
+    report = analyse(dataframe)
+    if not report.recommendations:
+        raise ValueError("No chart recommendations are available for this dataset")
+    if isinstance(chart, bool):
+        raise ValueError("chart must be a 1-based recommendation number or ChartRecommendation")
+    if isinstance(chart, int):
+        if not 1 <= chart <= len(report.recommendations):
+            raise ValueError(f"chart must be between 1 and {len(report.recommendations)}")
+        recommendation = report.recommendations[chart - 1]
+    elif isinstance(chart, ChartRecommendation) and chart in report.recommendations:
+        recommendation = chart
+    else:
+        raise ValueError("chart must be a recommendation from dl.analyse(df)")
+    return render_recommendation(
+        dataframe, recommendation, aggregation=aggregation,
+        max_categories=max_categories,
     )
 
 

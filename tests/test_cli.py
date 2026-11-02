@@ -181,7 +181,7 @@ def test_cli_train_will_not_overwrite_existing_artifact(monkeypatch, capsys, tmp
 def test_cli_guide_shows_analysis_and_allows_skipping_training(monkeypatch, capsys, tmp_path):
     dataset = tmp_path / "small.csv"
     pd.DataFrame({"age": [20, 21, 22], "label": [0, 1, 0]}).to_csv(dataset, index=False)
-    answers = iter(["s", "s"])
+    answers = iter(["s", "s", "s"])
     monkeypatch.setattr("builtins.input", lambda _: next(answers))
 
     assert main(["guide", str(dataset)]) == 0

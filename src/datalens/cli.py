@@ -150,12 +150,21 @@ def _training_output_path(dataset_path: str, target: str, output: str | None) ->
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="datalens", description="Analyse or train on a local dataset")
+    parser = argparse.ArgumentParser(prog="datalens", description="Analyse, visualise, or train on a local dataset")
     commands = parser.add_subparsers(dest="command", required=True)
     analyse_parser = commands.add_parser("analyse", help="Analyse a CSV or Excel file")
     analyse_parser.add_argument("path", help="Path to a CSV or Excel file")
     analyse_parser.add_argument("--format", choices=("text", "json"), default="text")
     analyse_parser.add_argument("--verbose", action="store_true", help="Show every column and suggestion")
+    visualise_parser = commands.add_parser(
+        "visualise", aliases=["visualize"],
+        help="List chart ideas or save one interactive HTML chart",
+    )
+    visualise_parser.add_argument("path", help="Path to a CSV or Excel file")
+    visualise_parser.add_argument("--chart", type=int, help="1-based chart number from the suggestion list")
+    visualise_parser.add_argument("--output", help="Destination .html file")
+    visualise_parser.add_argument("--aggregation", choices=("mean", "sum"), default="mean")
+    visualise_parser.add_argument("--max-categories", type=int, default=20)
     train_parser = commands.add_parser("train", help="Train a tabular classification model")
     train_parser.add_argument("path", help="Path to a CSV or Excel file")
     train_parser.add_argument("--target", required=True, help="Column to predict")
@@ -172,6 +181,34 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         dataset = load_dataset(args.path)
+        if args.command in {"visualise", "visualize"}:
+            from datalens.api import analyse, visualise
+
+            analysis = analyse(dataset)
+            if args.chart is None:
+                if args.output:
+                    raise ValueError("Use --chart NUMBER with --output to save a chart")
+                print(f"DataLens | chart ideas ({len(analysis.recommendations)})")
+                for number, item in enumerate(analysis.recommendations, 1):
+                    print(f"  {number}) {item.chart_type}: {item.title} [{', '.join(item.columns)}]")
+                    print(f"     Why: {item.reason}")
+                if analysis.recommendations:
+                    print("Use --chart NUMBER --output chart.html to save one interactive chart.")
+                return 0
+            if not args.output:
+                raise ValueError("Use --output chart.html to save the selected chart")
+            rendered = visualise(
+                dataset, chart=args.chart, aggregation=args.aggregation,
+                max_categories=args.max_categories,
+            )
+            destination = rendered.save(args.output)
+            details = rendered.to_dict()
+            print(f"DataLens | {details['chart_type']} chart")
+            print(f"{details['title']} [{', '.join(details['columns'])}]")
+            print(f"Rows: {details['plotted_rows']} plotted / {details['source_rows']} source")
+            print(f"Method: {details['transformation']}")
+            print(f"Saved interactive HTML: {destination}")
+            return 0
         if args.command == "guide":
             from datalens.guided import guide_dataframe
 

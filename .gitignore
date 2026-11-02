@@ -16,3 +16,4 @@ Thumbs.db
 
 # Local public validation datasets and generated run artifacts
 /datasets/external/
+/runs/charts/

@@ -37,7 +37,7 @@ def test_analyse_keeps_chart_ideas_and_adds_traceable_cleaning_suggestions():
 def test_guide_applies_imputer_scaler_model_and_save_choices(tmp_path):
     frame = _frame()
     original = frame.copy(deep=True)
-    answers = iter(["s", "y", "y", "2", "2", "3", "2", "y", "y"])
+    answers = iter(["s", "s", "y", "y", "2", "2", "3", "2", "y", "y"])
     output = []
 
     result = dl.guide(
@@ -64,7 +64,7 @@ def test_guide_applies_imputer_scaler_model_and_save_choices(tmp_path):
 def test_guide_can_stop_after_analysis_without_training():
     frame = _frame()
     original = frame.copy(deep=True)
-    answers = iter(["s", "s"])
+    answers = iter(["s", "s", "s"])
     output = []
 
     result = dl.guide(
@@ -79,7 +79,7 @@ def test_guide_can_stop_after_analysis_without_training():
 def test_guide_skips_a_column_and_removes_duplicate_rows():
     frame = pd.concat([_frame(), _frame().iloc[[0, 1]]], ignore_index=True)
     original = frame.copy(deep=True)
-    answers = iter(["s", "y", "y", "y", "s", "1", "3", "y", "s"])
+    answers = iter(["s", "s", "y", "y", "y", "s", "1", "3", "y", "s"])
 
     result = dl.guide(
         frame, target="label", input_fn=lambda _: next(answers),
@@ -92,3 +92,19 @@ def test_guide_skips_a_column_and_removes_duplicate_rows():
     assert "age" in result.excluded_columns
     assert "age" not in result.feature_columns
     assert result.model == "random_forest"
+
+
+def test_guide_can_save_chart_and_skip_training(tmp_path):
+    frame = _frame()
+    destination = tmp_path / "profile.html"
+    answers = iter(["y", "y", "1", str(destination), "s"])
+    output = []
+
+    result = dl.guide(
+        frame, input_fn=lambda _: next(answers), output_fn=output.append
+    )
+
+    assert result is None
+    assert destination.exists()
+    assert "plotly" in destination.read_text(encoding="utf-8").lower()
+    assert any("Saved interactive HTML" in line for line in output)

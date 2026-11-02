@@ -45,7 +45,8 @@ change the DataFrame or ask questions. For an interactive walkthrough, run:
 .\.venv\Scripts\datalens.exe guide examples/titanic_train_demo.csv --target Survived --output runs/titanic-guided.joblib
 ```
 
-The guide shows chart ideas and then asks whether to continue to training. It
+The guide shows chart ideas, offers to save one as an interactive HTML chart,
+and then asks whether to continue to training. It
 offers per-column missing-value choices (recommended imputer, alternative, or
 skip the column), duplicate handling when needed, scaler and model choices,
 and a final save/skip choice. Enter `x` at any prompt to exit. Fitted imputers,
@@ -109,6 +110,45 @@ learning are future work. Review excluded features and any possible target
 leakage before using the saved model. Model artifacts are Python pickle-based:
 load only artifacts you trust, using compatible package versions.
 
+## Render an interactive chart
+
+List the chart ideas calculated by `analyse` and save a selected chart by its
+1-based number:
+
+```powershell
+.\.venv\Scripts\datalens.exe visualise examples/sales_clean.csv
+.\.venv\Scripts\datalens.exe visualise examples/sales_clean.csv --chart 5 --output runs/charts/sales-over-time.html
+```
+
+The `visualize` spelling also works. The saved HTML is interactive and
+self-contained; choose a new output name for each run because DataLens will not
+overwrite one. `runs/charts/` is ignored by Git. Histograms count finite values,
+bars count categories including missing values, scatter plots use rows with
+both axes present, and line charts aggregate valid rows by exact date/time.
+The line default is `mean`; use `--aggregation sum` when a total makes more
+sense. `--max-categories` controls how many bars are shown before the remaining
+categories are grouped into `Other`.
+
+From Python, the same renderer accepts a chart number or a recommendation from
+the analysis report:
+
+```python
+import pandas as pd
+import datalens as dl
+
+df = pd.read_csv("examples/sales_clean.csv")
+report = dl.analyse(df)
+chart = dl.visualise(df, chart=report.recommendations[4])
+print(chart.to_dict())  # source rows, plotted rows, and transformation
+print(chart.plot_data)  # exact values shown in the figure
+chart.save("runs/charts/sales-over-time.html")
+```
+
+The first visualization engine renders the four current recommendation types:
+histogram, category count bar, time line, and numeric scatter. Recommendations
+remain rule-based and are presented in deterministic order, not ranked by a
+learned usefulness score.
+
 You can also run the CLI as `python -m datalens.cli analyse ...` from the
 installed environment. To verify the core on Windows, run
 `.\.venv\Scripts\python.exe -m pytest`.
@@ -137,11 +177,11 @@ claims that a chart reveals a causal relationship.
 workflow. These are separate functions so analysis never unexpectedly starts
 model training.
 
-The original DataLens vision extends beyond the current core: rendered and
-interactive charts, relationship and anomaly analysis, natural-language
-questions, dashboards, and more data sources are still planned. The current
-analysis API provides measured profiles, quality findings, and chart
-recommendations; it does not claim to deliver those later features yet.
+The original DataLens vision extends beyond the current core: deeper
+relationship and anomaly analysis, natural-language questions, dashboards,
+and more data sources are still planned. The current analysis API provides
+measured profiles, quality findings, and chart recommendations, and the
+visualization API renders the supported chart types locally.
 
 For five public-data checks and reusable local demo files, see the
 [validation dataset guide](Docs/validation-datasets.md) and

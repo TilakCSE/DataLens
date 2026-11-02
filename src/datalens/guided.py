@@ -83,6 +83,26 @@ def _destination(
     return destination
 
 
+def _chart_destination(
+    suggested: Path, *, ask: Callable[[str], str], show: Callable[[str], None]
+) -> Path | None:
+    while True:
+        answer = ask(
+            f"HTML chart path [{suggested}] (Enter to accept, s to skip, x to exit): "
+        ).strip()
+        if answer.lower() in {"x", "exit", "q", "quit"}:
+            raise _ExitWorkflow
+        if answer.lower() in {"s", "skip"}:
+            return None
+        destination = Path(answer) if answer else suggested
+        if destination.suffix.lower() != ".html":
+            show("The chart path must end in .html.")
+        elif destination.exists():
+            show(f"Chart output already exists: {destination}. Choose another path.")
+        else:
+            return destination
+
+
 def guide_dataframe(
     dataframe: pd.DataFrame, *, target: str | None = None,
     output: str | Path | None = None, source_name: str = "dataset",
@@ -94,7 +114,7 @@ def guide_dataframe(
     Interactive choices affect a fitted pipeline; the supplied DataFrame is
     never changed. A skipped or exited training stage returns None.
     """
-    from datalens.api import analyse, train
+    from datalens.api import analyse, train, visualise
     from datalens.cli import format_report, format_training_result
 
     ask = input_fn or input
@@ -109,9 +129,46 @@ def guide_dataframe(
                 {"y": "Yes", "s": "Skip"}, default="y", ask=ask, show=show,
             )
             if choice == "y":
-                for item in report.recommendations:
-                    show(f"  {item.chart_type}: {item.title} [{', '.join(item.columns)}]")
+                for number, item in enumerate(report.recommendations, 1):
+                    show(f"  {number}) {item.chart_type}: {item.title} [{', '.join(item.columns)}]")
                     show(f"    Why: {item.reason}")
+            chart_choice = _choose(
+                "Create an interactive HTML chart from a recommended idea?",
+                {"y": "Yes", "s": "Skip charts"}, default="s", ask=ask, show=show,
+            )
+            if chart_choice == "y":
+                if choice != "y":
+                    for number, item in enumerate(report.recommendations, 1):
+                        show(f"  {number}) {item.chart_type}: {item.title} [{', '.join(item.columns)}]")
+                while True:
+                    answer = ask(
+                        f"Chart number [1-{len(report.recommendations)}, s to skip, x to exit]: "
+                    ).strip().lower()
+                    if answer in {"x", "exit", "q", "quit"}:
+                        raise _ExitWorkflow
+                    if answer in {"s", "skip"}:
+                        break
+                    if answer.isdigit() and 1 <= int(answer) <= len(report.recommendations):
+                        chart_number = int(answer)
+                        rendered = visualise(dataframe, chart=chart_number)
+                        source = Path(source_name)
+                        suggested_chart = Path("runs") / "charts" / (
+                            f"{source.stem}-chart-{chart_number}.html"
+                        )
+                        destination = _chart_destination(
+                            suggested_chart, ask=ask, show=show
+                        )
+                        if destination is not None:
+                            saved = rendered.save(destination)
+                            facts = rendered.to_dict()
+                            show(
+                                f"Chart: {facts['title']} | {facts['plotted_rows']} of "
+                                f"{facts['source_rows']} rows plotted"
+                            )
+                            show(f"Method: {facts['transformation']}")
+                            show(f"Saved interactive HTML: {saved}")
+                        break
+                    show("Enter a listed chart number, s, or x.")
 
         choice = _choose(
             "Continue from data analysis to guided classification training?",
