@@ -143,6 +143,12 @@ questions, dashboards, and more data sources are still planned. The current
 analysis API provides measured profiles, quality findings, and chart
 recommendations; it does not claim to deliver those later features yet.
 
+For five public-data checks and reusable local demo files, see the
+[validation dataset guide](Docs/validation-datasets.md) and
+[measured validation results](Docs/external-validation-results.md). The CSVs,
+saved models, and detailed run output live in the Git-ignored
+`datasets/external/` folder.
+
 See the [core contract](Docs/core-contract.md) and
 [training phase contract](Docs/automl-phase-contract.md) for the deliverables,
 the [agent workflow](Docs/agent-workflow.md) for the worktree setup, and the

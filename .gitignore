@@ -13,3 +13,6 @@ dist/
 !.env.example
 .DS_Store
 Thumbs.db
+
+# Local public validation datasets and generated run artifacts
+/datasets/external/
