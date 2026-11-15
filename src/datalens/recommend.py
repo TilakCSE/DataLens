@@ -2,7 +2,70 @@
 
 from __future__ import annotations
 
-from datalens.models import ChartRecommendation, ColumnProfile
+from dataclasses import dataclass
+
+from datalens.models import AnalysisReport, ChartRecommendation, ColumnProfile
+
+
+@dataclass(frozen=True)
+class RankedChart:
+    """A chart's stable number and the measured facts used to order it."""
+
+    number: int
+    recommendation: ChartRecommendation
+    lowest_non_null_count: int
+    source_rows: int
+    first_of_type: bool
+
+    @property
+    def ranking_reason(self) -> str:
+        diversity = "First pick for this chart type; " if self.first_of_type else ""
+        return (
+            f"{diversity}lowest non-missing column count is "
+            f"{self.lowest_non_null_count}/{self.source_rows} rows."
+        )
+
+
+def rank_recommendations(report: AnalysisReport) -> tuple[RankedChart, ...]:
+    """Prioritize chart-type variety, then source-column completeness.
+
+    This is a deterministic presentation order, not a quality probability or
+    an assessment of what insight a chart will reveal. Original chart numbers
+    remain unchanged so existing visualise calls still refer to the same idea.
+    """
+    profiles = {column.name: column for column in report.columns}
+    candidates: list[RankedChart] = []
+    for number, recommendation in enumerate(report.recommendations, 1):
+        counts = [
+            profiles[name].non_null_count
+            for name in recommendation.columns if name in profiles
+        ]
+        candidates.append(RankedChart(
+            number, recommendation, min(counts, default=0), report.row_count, False,
+        ))
+
+    chart_types = ("line", "bar", "histogram", "scatter")
+    leaders = []
+    for chart_type in chart_types:
+        matching = [item for item in candidates if item.recommendation.chart_type == chart_type]
+        if matching:
+            leaders.append(min(matching, key=lambda item: (-item.lowest_non_null_count, item.number)))
+    leaders.sort(key=lambda item: (
+        -item.lowest_non_null_count,
+        chart_types.index(item.recommendation.chart_type),
+    ))
+    leader_numbers = {item.number for item in leaders}
+    remaining = sorted(
+        (item for item in candidates if item.number not in leader_numbers),
+        key=lambda item: (-item.lowest_non_null_count, item.number),
+    )
+    return tuple(
+        RankedChart(
+            item.number, item.recommendation, item.lowest_non_null_count,
+            item.source_rows, item.number in leader_numbers,
+        )
+        for item in (*leaders, *remaining)
+    )
 
 
 def _is_identifier(column: ColumnProfile) -> bool:

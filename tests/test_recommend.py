@@ -1,5 +1,5 @@
-from datalens.models import ColumnProfile
-from datalens.recommend import recommend_charts
+from datalens.models import AnalysisReport, ChartRecommendation, ColumnProfile
+from datalens.recommend import rank_recommendations, recommend_charts
 
 
 def column(name: str, kind: str) -> ColumnProfile:
@@ -63,3 +63,29 @@ def test_titanic_like_profiles_avoid_identifier_and_high_cardinality_charts():
     assert any(item.chart_type == "bar" and item.columns == ("Survived",) for item in recommendations)
     assert any(item.chart_type == "bar" and item.columns == ("Pclass",) for item in recommendations)
     assert any(item.chart_type == "scatter" and item.columns == ("Age", "Fare") for item in recommendations)
+
+
+def test_ranking_diversifies_types_then_uses_measured_column_completeness():
+    profiles = (
+        ColumnProfile("full", "numeric", "float64", 100, 0, 80),
+        ColumnProfile("partial", "numeric", "float64", 60, 40, 50),
+        ColumnProfile("group", "categorical", "object", 90, 10, 3),
+        ColumnProfile("date", "datetime", "object", 100, 0, 100),
+    )
+    ideas = (
+        ChartRecommendation("histogram", "Full", ("full",), "numeric"),
+        ChartRecommendation("histogram", "Partial", ("partial",), "numeric"),
+        ChartRecommendation("scatter", "Pair", ("full", "partial"), "numeric pair"),
+        ChartRecommendation("bar", "Groups", ("group",), "categorical"),
+        ChartRecommendation("line", "Trend", ("date", "partial"), "dated measure"),
+    )
+    report = AnalysisReport(100, 4, 0, profiles, recommendations=ideas)
+
+    ranked = rank_recommendations(report)
+
+    assert [item.number for item in ranked] == [1, 4, 5, 3, 2]
+    assert [item.lowest_non_null_count for item in ranked] == [100, 90, 60, 60, 60]
+    assert [item.first_of_type for item in ranked] == [True, True, True, True, False]
+    assert "60/100" in ranked[2].ranking_reason
+    assert report.recommendations == ideas
+    assert rank_recommendations(AnalysisReport(0, 0, 0, ())) == ()

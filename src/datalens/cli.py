@@ -13,6 +13,8 @@ from datalens.models import AnalysisReport
 
 def format_report(report: AnalysisReport, *, verbose: bool = False) -> str:
     """Render compact highlights or the full report without changing its facts."""
+    from datalens.recommend import rank_recommendations
+
     kinds: dict[str, int] = {}
     for column in report.columns:
         kinds[column.kind] = kinds.get(column.kind, 0) + 1
@@ -41,18 +43,20 @@ def format_report(report: AnalysisReport, *, verbose: bool = False) -> str:
         if len(visible_issues) < len(issues):
             lines.append(f"  ... {len(issues) - len(visible_issues)} more")
 
-    recommendations = report.recommendations
+    recommendations = rank_recommendations(report)
     visible_recommendations = recommendations if verbose else recommendations[:3]
-    lines.extend(("", f"Chart ideas ({len(recommendations)}):"))
+    lines.extend(("", f"Chart ideas ({len(recommendations)}, ranked):"))
     if not recommendations:
         lines.append("  None available for the profiled column types")
     else:
-        for recommendation in visible_recommendations:
+        for ranked in visible_recommendations:
+            recommendation = ranked.recommendation
             lines.append(
-                f"  {recommendation.chart_type}: {recommendation.title} "
+                f"  {ranked.number}) {recommendation.chart_type}: {recommendation.title} "
                 f"[{', '.join(recommendation.columns)}]"
             )
             lines.append(f"    Why: {recommendation.reason}")
+            lines.append(f"    Priority: {ranked.ranking_reason}")
         if len(visible_recommendations) < len(recommendations):
             lines.append(f"  ... {len(recommendations) - len(visible_recommendations)} more")
 
@@ -165,6 +169,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     visualise_parser.add_argument("--output", help="Destination .html file")
     visualise_parser.add_argument("--aggregation", choices=("mean", "sum"), default="mean")
     visualise_parser.add_argument("--max-categories", type=int, default=20)
+    visualise_parser.add_argument("--all", action="store_true", help="List every chart idea, not only the top five")
     train_parser = commands.add_parser("train", help="Train a tabular classification model")
     train_parser.add_argument("path", help="Path to a CSV or Excel file")
     train_parser.add_argument("--target", required=True, help="Column to predict")
@@ -183,16 +188,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         dataset = load_dataset(args.path)
         if args.command in {"visualise", "visualize"}:
             from datalens.api import analyse, visualise
+            from datalens.recommend import rank_recommendations
 
             analysis = analyse(dataset)
             if args.chart is None:
                 if args.output:
                     raise ValueError("Use --chart NUMBER with --output to save a chart")
-                print(f"DataLens | chart ideas ({len(analysis.recommendations)})")
-                for number, item in enumerate(analysis.recommendations, 1):
-                    print(f"  {number}) {item.chart_type}: {item.title} [{', '.join(item.columns)}]")
+                ranked_charts = rank_recommendations(analysis)
+                visible = ranked_charts if args.all else ranked_charts[:5]
+                print(f"DataLens | chart ideas ({len(ranked_charts)}), ranked")
+                for ranked in visible:
+                    item = ranked.recommendation
+                    print(f"  {ranked.number}) {item.chart_type}: {item.title} [{', '.join(item.columns)}]")
                     print(f"     Why: {item.reason}")
-                if analysis.recommendations:
+                    print(f"     Priority: {ranked.ranking_reason}")
+                if len(visible) < len(ranked_charts):
+                    print(f"  ... {len(ranked_charts) - len(visible)} more; use --all to list every idea.")
+                if ranked_charts:
                     print("Use --chart NUMBER --output chart.html to save one interactive chart.")
                 return 0
             if not args.output:

@@ -112,11 +112,12 @@ load only artifacts you trust, using compatible package versions.
 
 ## Render an interactive chart
 
-List the chart ideas calculated by `analyse` and save a selected chart by its
-1-based number:
+List the top five chart ideas calculated by `analyse`, show every idea with
+`--all`, and save a selected chart by its stable 1-based number:
 
 ```powershell
 .\.venv\Scripts\datalens.exe visualise examples/sales_clean.csv
+.\.venv\Scripts\datalens.exe visualise examples/sales_clean.csv --all
 .\.venv\Scripts\datalens.exe visualise examples/sales_clean.csv --chart 5 --output runs/charts/sales-over-time.html
 ```
 
@@ -138,7 +139,10 @@ import datalens as dl
 
 df = pd.read_csv("examples/sales_clean.csv")
 report = dl.analyse(df)
-chart = dl.visualise(df, chart=report.recommendations[4])
+print(report.summary)
+ranked = dl.rank_charts(df)
+print(ranked[0].number, ranked[0].ranking_reason)
+chart = dl.visualise(df, chart=ranked[0].number)
 print(chart.to_dict())  # source rows, plotted rows, and transformation
 print(chart.plot_data)  # exact values shown in the figure
 chart.save("runs/charts/sales-over-time.html")
@@ -146,8 +150,12 @@ chart.save("runs/charts/sales-over-time.html")
 
 The first visualization engine renders the four current recommendation types:
 histogram, category count bar, time line, and numeric scatter. Recommendations
-remain rule-based and are presented in deterministic order, not ranked by a
-learned usefulness score.
+are ranked by a documented rule: show one high-coverage example of each
+available chart type, then the remaining ideas by source-column completeness.
+The ranking is a navigation aid, not a learned usefulness or confidence score.
+The original `report.recommendations` order and its chart numbers remain stable.
+See [the chart ranking method](Docs/chart-ranking.md) for the exact rule and its
+limits.
 
 You can also run the CLI as `python -m datalens.cli analyse ...` from the
 installed environment. To verify the core on Windows, run

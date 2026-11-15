@@ -116,10 +116,12 @@ def guide_dataframe(
     """
     from datalens.api import analyse, train, visualise
     from datalens.cli import format_report, format_training_result
+    from datalens.recommend import rank_recommendations
 
     ask = input_fn or input
     show = output_fn or print
     report = analyse(dataframe)
+    ranked_charts = rank_recommendations(report)
     show(format_report(report))
 
     try:
@@ -129,17 +131,20 @@ def guide_dataframe(
                 {"y": "Yes", "s": "Skip"}, default="y", ask=ask, show=show,
             )
             if choice == "y":
-                for number, item in enumerate(report.recommendations, 1):
-                    show(f"  {number}) {item.chart_type}: {item.title} [{', '.join(item.columns)}]")
+                for ranked in ranked_charts:
+                    item = ranked.recommendation
+                    show(f"  {ranked.number}) {item.chart_type}: {item.title} [{', '.join(item.columns)}]")
                     show(f"    Why: {item.reason}")
+                    show(f"    Priority: {ranked.ranking_reason}")
             chart_choice = _choose(
                 "Create an interactive HTML chart from a recommended idea?",
                 {"y": "Yes", "s": "Skip charts"}, default="s", ask=ask, show=show,
             )
             if chart_choice == "y":
                 if choice != "y":
-                    for number, item in enumerate(report.recommendations, 1):
-                        show(f"  {number}) {item.chart_type}: {item.title} [{', '.join(item.columns)}]")
+                    for ranked in ranked_charts:
+                        item = ranked.recommendation
+                        show(f"  {ranked.number}) {item.chart_type}: {item.title} [{', '.join(item.columns)}]")
                 while True:
                     answer = ask(
                         f"Chart number [1-{len(report.recommendations)}, s to skip, x to exit]: "

@@ -121,3 +121,34 @@ def test_cli_lists_and_saves_selected_chart(tmp_path, capsys):
     ]) == 0
     assert destination.exists()
     assert "3 plotted / 3 source" in capsys.readouterr().out
+
+
+def test_cli_quick_picks_keep_original_numbers_and_all_option(tmp_path, capsys):
+    dataset = tmp_path / "wide.csv"
+    pd.DataFrame({
+        f"feature_{number}": list(range(25)) for number in range(7)
+    }).to_csv(dataset, index=False)
+
+    assert main(["visualise", str(dataset)]) == 0
+    quick_picks = capsys.readouterr().out
+    assert "1) histogram" in quick_picks
+    assert "8) scatter" in quick_picks
+    assert "--all" in quick_picks
+    assert "6) histogram" not in quick_picks
+
+    assert main(["visualise", str(dataset), "--all"]) == 0
+    complete = capsys.readouterr().out
+    assert "6) histogram" in complete
+    assert "Priority:" in complete
+
+
+def test_ranked_public_chart_number_renders_its_original_recommendation():
+    frame = pd.DataFrame({
+        "group": ["A", "B", "A", "B"],
+        "amount": [1.0, 2.0, 3.0, 4.0],
+    })
+    report = dl.analyse(frame)
+
+    for ranked in dl.rank_charts(frame):
+        assert report.recommendations[ranked.number - 1] == ranked.recommendation
+        assert dl.visualise(frame, chart=ranked.number).recommendation == ranked.recommendation

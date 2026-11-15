@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Callable
 from datalens.analysis import profile_dataframe
 from datalens.cleaning import suggest_cleaning
 from datalens.models import AnalysisReport, ChartRecommendation
-from datalens.recommend import recommend_charts
+from datalens.recommend import RankedChart, rank_recommendations, recommend_charts
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -28,6 +28,11 @@ def analyse(dataframe: pd.DataFrame) -> AnalysisReport:
         recommendations=recommend_charts(columns),
         cleaning_suggestions=suggest_cleaning(columns, duplicate_count),
     )
+
+
+def rank_charts(dataframe: pd.DataFrame) -> tuple[RankedChart, ...]:
+    """Return ranked chart ideas with stable numbers and ordering reasons."""
+    return rank_recommendations(analyse(dataframe))
 
 
 def visualise(
