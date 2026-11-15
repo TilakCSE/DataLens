@@ -112,6 +112,18 @@ load only artifacts you trust, using compatible package versions.
 
 ## Render an interactive chart
 
+Try the current visualization phase from Python. This script prints the ranked
+ideas, renders the first one, shows the exact plotted data, and saves an HTML
+chart you can open in a browser:
+
+```powershell
+.\.venv\Scripts\python.exe examples\visualization_ranking_demo.py --output runs\charts\python-demo.html
+```
+
+The CSV is optional and defaults to `examples/sales_clean.csv`. Add `--chart N`
+to render a specific original chart number. Choose a new output filename when
+you run it again; DataLens does not overwrite existing charts.
+
 List the top five chart ideas calculated by `analyse`, show every idea with
 `--all`, and save a selected chart by its stable 1-based number:
 

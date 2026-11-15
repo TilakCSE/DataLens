@@ -8,3 +8,4 @@
 - Add focused tests for behavior that could be wrong on real datasets, especially missing values, mixed types, and empty inputs.
 - Do not edit the original project brief unless the user explicitly requests it.
 - Before handing off work, run the relevant tests and state what passed or could not be run.
+- For every phase, provide a runnable Python API demo and a runnable CLI demo with exact commands. Run both before handoff, then wait for the user's review before starting the next phase.
