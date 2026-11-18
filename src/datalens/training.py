@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import platform
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -29,6 +30,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer, MinMaxScaler, OneHotEncoder, RobustScaler, StandardScaler
 
 from datalens.cleaning import looks_like_identifier
+from datalens.model_diagnostics import build_class_diagnostics, save_confusion_html
 
 
 
@@ -62,6 +64,7 @@ class TrainingResult:
     preprocessing: dict[str, Any] = field(default_factory=dict)
     selection_method: str = "cross_validation"
     dropped_duplicate_rows: int = 0
+    class_diagnostics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Return JSON-compatible facts about this run, excluding model bytes."""
@@ -85,6 +88,7 @@ class TrainingResult:
             "preprocessing": dict(self.preprocessing),
             "selection_method": self.selection_method,
             "dropped_duplicate_rows": self.dropped_duplicate_rows,
+            "class_diagnostics": deepcopy(self.class_diagnostics),
         }
 
     def save(self, path: str | Path) -> Path:
@@ -110,6 +114,13 @@ class TrainingResult:
             json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
         )
         return output
+
+    def save_confusion_matrix(self, path: str | Path) -> Path:
+        """Save the held-out class counts as an interactive HTML heatmap."""
+        return save_confusion_html(
+            self.class_diagnostics, path,
+            title=f"Held-out confusion matrix: {self.target} ({self.model})",
+        )
 
 
 def _feature_groups(frame: pd.DataFrame) -> tuple[list[str], list[str], list[str], list[str]]:
@@ -342,6 +353,9 @@ def train_classifier(
     name = winning["model"]
     fitted = fitted_candidates[name]
     predictions = fitted.predict(X_test)
+    class_diagnostics = build_class_diagnostics(
+        y_train, y_test, predictions, fitted.classes_,
+    )
     metrics = {
         "accuracy": float(accuracy_score(y_test, predictions)),
         "balanced_accuracy": float(balanced_accuracy_score(y_test, predictions)),
@@ -371,4 +385,5 @@ def train_classifier(
         },
         selection_method="cross_validation" if model == "auto" else "user_override",
         dropped_duplicate_rows=dropped_duplicate_rows,
+        class_diagnostics=class_diagnostics,
     )

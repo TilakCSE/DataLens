@@ -89,6 +89,33 @@ held-out accuracy, balanced accuracy, and macro F1. Use `--format json` for the
 full training report. Choose a new output path for each run; the CLI will not
 overwrite an existing artifact.
 
+## Inspect class errors
+
+The training result now includes held-out precision, recall, F1, and row count
+for every target class, plus an actual-versus-predicted confusion matrix. The
+JSON run manifest contains the full data. The ordinary CLI output highlights
+the class with the lowest held-out recall; `--diagnostics` prints every class.
+
+Run the Python API demo and save an interactive matrix:
+
+```powershell
+.\.venv\Scripts\python.exe examples\class_diagnostics_demo.py --matrix-output runs\charts\python-class-matrix.html
+```
+
+Run the same phase through the CLI and save the fitted model, JSON report, and
+matrix chart:
+
+```powershell
+.\.venv\Scripts\datalens.exe train examples\titanic_train_demo.csv --target Survived --output runs\models\titanic-diagnostics.joblib --diagnostics --matrix-output runs\charts\cli-class-matrix.html
+```
+
+The Python demo accepts another CSV and `--target` to inspect a different
+classification task. For the saved five-class Heart Disease file, use
+`datasets\external\heart_cleveland.csv --target num`. Choose new output names
+on later runs. The matrix rows are actual classes and columns are predicted
+classes; the diagonal counts correct predictions. See the
+[diagnostics method](Docs/class-diagnostics.md) for interpretation and limits.
+
 From Python, the same training engine is available through the public API:
 
 ```python

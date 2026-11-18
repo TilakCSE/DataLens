@@ -58,3 +58,11 @@ ranking and rendering are worthwhile next steps.
 One random split per dataset cannot establish stable performance. This run
 does not test grouped or time-ordered data, calibration, fairness, or whether
 the output models are appropriate for real-world decisions.
+
+## Follow-up, 18 November 2026
+
+The classification diagnostics phase now adds per-class support, precision,
+recall, F1, and a held-out confusion matrix to the training result and saved
+manifest. The original results table above remains the measured 2 November
+snapshot. See [class-diagnostics.md](class-diagnostics.md) for a repeatable
+five-class Heart Disease run and interpretation.

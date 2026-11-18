@@ -37,7 +37,16 @@ def test_mixed_values_and_high_cardinality_are_handled_without_mutating_input():
         "dummy", "logistic_regression", "random_forest"
     }
     assert len(result.pipeline.predict(frame[result.feature_columns])) == len(frame)
-    json.dumps(result.to_dict())
+    report = result.to_dict()
+    diagnostics = report["class_diagnostics"]
+    assert sum(diagnostics["train_support"]) == result.train_rows
+    assert sum(item["support"] for item in diagnostics["per_class"]) == result.test_rows
+    assert sum(sum(row) for row in diagnostics["confusion_matrix"]) == result.test_rows
+    assert len(diagnostics["labels"]) == 2
+    assert sum(item["f1"] for item in diagnostics["per_class"]) / 2 == pytest.approx(
+        result.test_metrics["f1_macro"]
+    )
+    json.dumps(report, allow_nan=False)
 
 
 def test_public_train_entry_point_and_camel_case_identifier():
@@ -67,6 +76,13 @@ def test_train_only_imputation_statistics_and_saved_pipeline(tmp_path):
     manifest = json.loads((tmp_path / "model.json").read_text(encoding="utf-8"))
     assert manifest["model"] == result.model
     assert manifest["versions"]["scikit_learn"]
+    assert manifest["class_diagnostics"] == result.to_dict()["class_diagnostics"]
+    matrix_html = result.save_confusion_matrix(tmp_path / "matrix.html")
+    assert "Held-out confusion matrix" in matrix_html.read_text(encoding="utf-8")
+    with pytest.raises(FileExistsError):
+        result.save_confusion_matrix(matrix_html)
+    with pytest.raises(ValueError, match=".html"):
+        result.save_confusion_matrix(tmp_path / "matrix.txt")
 
 
 @pytest.mark.parametrize(

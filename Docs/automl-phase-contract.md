@@ -9,9 +9,11 @@ pipeline; selects by training cross-validation macro F1; evaluates on an
 untouched holdout; and saves the fitted pipeline with a JSON manifest. The
 separate `dl.guide(df)` and `datalens guide <path>` walkthrough now connects
 the analysis report to chart ideas, cleaning choices, model choice, and saving.
-The non-interactive `train` command retains reproducible defaults. Remaining
-work includes class balance and configuration reporting, grouped or time-aware
-splits, and a second independent dataset.
+The non-interactive `train` command retains reproducible defaults. Five public
+datasets were checked independently on 2 November 2026. The 18 November
+diagnostics phase adds training and held-out class support, per-class scores,
+and a confusion matrix. Grouped or time-aware splits and broader configuration
+reporting remain future work.
 
 ## Purpose
 

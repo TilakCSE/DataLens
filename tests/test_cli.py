@@ -89,12 +89,26 @@ def sample_training_result():
                 "random_state": 42,
                 "test_size": 0.2,
                 "dropped_target_rows": 0,
+                "class_diagnostics": {
+                    "labels": [0, 1],
+                    "train_support": [4, 4],
+                    "per_class": [
+                        {"label": 0, "precision": 0.5, "recall": 1.0, "f1": 0.667, "support": 1},
+                        {"label": 1, "precision": 0.0, "recall": 0.0, "f1": 0.0, "support": 1},
+                    ],
+                    "confusion_matrix": [[1, 0], [1, 0]],
+                },
             }
 
         def save(self, path):
             saved = Path(path)
             saved.write_text("test artifact", encoding="utf-8")
             saved.with_suffix(".json").write_text("{}", encoding="utf-8")
+            return saved
+
+        def save_confusion_matrix(self, path):
+            saved = Path(path)
+            saved.write_text("<html>matrix</html>", encoding="utf-8")
             return saved
 
     return TrainingResult()
@@ -107,6 +121,50 @@ def test_training_text_summarizes_measured_scores():
     assert "Held-out test: accuracy 0.500" in output
     assert "PassengerId looks like an identifier" in output
     assert "Saved pipeline: model.joblib" in output
+    assert "Lowest held-out class recall: 1 0.000" in output
+
+
+def test_cli_training_diagnostics_show_classes_and_save_matrix(monkeypatch, capsys, tmp_path):
+    io_module = types.ModuleType("datalens.io")
+    io_module.load_dataset = lambda path: object()
+    training_module = types.ModuleType("datalens.training")
+    training_module.train_classifier = lambda df, target, **kwargs: sample_training_result()
+    monkeypatch.setitem(sys.modules, "datalens.io", io_module)
+    monkeypatch.setitem(sys.modules, "datalens.training", training_module)
+    matrix = tmp_path / "matrix.html"
+
+    assert main([
+        "train", "sample.csv", "--target", "label",
+        "--output", str(tmp_path / "model.joblib"),
+        "--diagnostics", "--matrix-output", str(matrix),
+    ]) == 0
+
+    output = capsys.readouterr().out
+    assert "Per-class held-out results" in output
+    assert "Actual 1: 1 0" in output
+    assert "rows actual, columns predicted" in output
+    assert matrix.read_text(encoding="utf-8") == "<html>matrix</html>"
+
+
+def test_cli_refuses_existing_matrix_before_training(monkeypatch, capsys, tmp_path):
+    io_module = types.ModuleType("datalens.io")
+    io_module.load_dataset = lambda path: object()
+    training_module = types.ModuleType("datalens.training")
+    training_module.train_classifier = lambda *args, **kwargs: (_ for _ in ()).throw(
+        AssertionError("training must not start")
+    )
+    monkeypatch.setitem(sys.modules, "datalens.io", io_module)
+    monkeypatch.setitem(sys.modules, "datalens.training", training_module)
+    matrix = tmp_path / "matrix.html"
+    matrix.write_text("keep me", encoding="utf-8")
+
+    assert main([
+        "train", "sample.csv", "--target", "label",
+        "--output", str(tmp_path / "model.joblib"),
+        "--matrix-output", str(matrix),
+    ]) == 1
+    assert matrix.read_text(encoding="utf-8") == "keep me"
+    assert "matrix output already exists" in capsys.readouterr().err
 
 
 def test_cli_uses_loader_and_api_for_json(monkeypatch, capsys):

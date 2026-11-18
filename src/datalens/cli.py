@@ -95,7 +95,10 @@ def _format_value(value: object) -> str:
     return str(value)
 
 
-def format_training_result(result: object, *, saved_path: Path | None = None) -> str:
+def format_training_result(
+    result: object, *, saved_path: Path | None = None,
+    show_diagnostics: bool = False, matrix_path: Path | None = None,
+) -> str:
     """Summarize measured training results without calling scores probabilities."""
     data = result.to_dict()
     metrics = data["test_metrics"]
@@ -120,6 +123,35 @@ def format_training_result(result: object, *, saved_path: Path | None = None) ->
         lines.append(
             f"  {candidate['model']}: {data['selection_metric']} {candidate['cv_score']:.3f}"
         )
+    diagnostics = data.get("class_diagnostics") or {}
+    classes = diagnostics.get("per_class", [])
+    if classes:
+        observed = [index for index, item in enumerate(classes) if item["support"] > 0]
+        if observed:
+            weakest = min(observed, key=lambda index: classes[index]["recall"])
+            item = classes[weakest]
+            correct = diagnostics["confusion_matrix"][weakest][weakest]
+            lines.append(
+                f"Lowest held-out class recall: {item['label']} "
+                f"{item['recall']:.3f} ({correct}/{item['support']} correctly identified)"
+            )
+        if show_diagnostics:
+            lines.extend(("", "Per-class held-out results (undefined metrics shown as 0):"))
+            lines.append("  Class | Train | Test | Precision | Recall | F1")
+            for index, item in enumerate(classes):
+                lines.append(
+                    f"  {item['label']} | {diagnostics['train_support'][index]} | "
+                    f"{item['support']} | {item['precision']:.3f} | "
+                    f"{item['recall']:.3f} | {item['f1']:.3f}"
+                )
+            lines.extend(("", "Confusion matrix (rows actual, columns predicted):"))
+            lines.append("  Predicted labels: " + ", ".join(
+                f"{index}={label}" for index, label in enumerate(diagnostics["labels"])
+            ))
+            for label, row in zip(diagnostics["labels"], diagnostics["confusion_matrix"], strict=True):
+                lines.append(f"  Actual {label}: " + " ".join(str(count) for count in row))
+        else:
+            lines.append("Use train --diagnostics for every class and the confusion matrix.")
     preprocessing = data.get("preprocessing")
     if preprocessing:
         numeric_methods = ", ".join(sorted(set(preprocessing["numeric_imputers"].values()))) or "none"
@@ -142,6 +174,8 @@ def format_training_result(result: object, *, saved_path: Path | None = None) ->
         lines.extend(f"  - {warning}" for warning in data["warnings"])
     if saved_path is not None:
         lines.extend(("", f"Saved pipeline: {saved_path}", f"Run manifest: {saved_path.with_suffix('.json')}"))
+    if matrix_path is not None:
+        lines.append(f"Confusion matrix HTML: {matrix_path}")
     return "\n".join(lines)
 
 
@@ -175,11 +209,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     train_parser.add_argument("--target", required=True, help="Column to predict")
     train_parser.add_argument("--output", help="Model artifact path (.joblib)")
     train_parser.add_argument("--format", choices=("text", "json"), default="text")
+    train_parser.add_argument("--diagnostics", action="store_true", help="Show per-class scores and confusion matrix")
+    train_parser.add_argument("--matrix-output", help="Save interactive confusion matrix as .html")
     guide_parser = commands.add_parser("guide", help="Walk through analysis, cleaning choices, and optional training")
     guide_parser.add_argument("path", help="Path to a CSV or Excel file")
     guide_parser.add_argument("--target", help="Proposed target column; you will confirm it")
     guide_parser.add_argument("--output", help="Suggested model artifact path (.joblib)")
     args = parser.parse_args(argv)
+    matrix_path: Path | None = None
 
     # Lazy imports keep report formatting usable without loading data or ML libraries.
     from datalens.io import load_dataset
@@ -238,10 +275,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                 raise ValueError("model output must end in .joblib")
             if destination.exists() or destination.with_suffix(".json").exists():
                 raise ValueError(f"model output already exists: {destination}")
+            if args.matrix_output:
+                matrix_path = Path(args.matrix_output)
+                if matrix_path.suffix.lower() != ".html":
+                    raise ValueError("matrix output must end in .html")
+                if matrix_path.exists():
+                    raise ValueError(f"matrix output already exists: {matrix_path}")
             from datalens.training import train_classifier
 
             report = train_classifier(dataset, args.target, test_size=0.2, random_state=42)
             saved_path = report.save(destination)
+            if matrix_path is not None:
+                report.save_confusion_matrix(matrix_path)
     except (OSError, ValueError) as error:
         print(f"DataLens: {error}", file=sys.stderr)
         return 1
@@ -249,7 +294,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.format == "json":
         print(json.dumps(report.to_dict(), indent=2, ensure_ascii=False))
     elif args.command == "train":
-        print(format_training_result(report, saved_path=saved_path))
+        print(format_training_result(
+            report, saved_path=saved_path,
+            show_diagnostics=args.diagnostics, matrix_path=matrix_path,
+        ))
     else:
         print(format_report(report, verbose=args.verbose))
     return 0
